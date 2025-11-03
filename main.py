@@ -2,48 +2,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from langchain_classic.agents import AgentExecutor
-from langchain_classic.agents.react.agent import create_react_agent
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableLambda
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from langchain_ollama import ChatOllama
 from langchain_tavily import TavilySearch
-
-from prompt import REACT_PROMPT_WITH_FORMAT_INSTRUCTIONS
 from schemas import AgentResponse
 
+# Define tools and model
 tools = [TavilySearch()]
-# llm = ChatOllama(model="gemma3:270m")
 llm = ChatOllama(model="mistral")
-structured_llm = llm.with_structured_output(AgentResponse) 
-react_prompt_with_format_instructions = PromptTemplate(
-    template=REACT_PROMPT_WITH_FORMAT_INSTRUCTIONS,
-    input_variables=["input", "agent_scratchpad", "tool_names"]
-).partial(format_instructions="")
 
-
-agent = create_react_agent(
-    llm=llm,
+# Create agent with structured output using ToolStrategy
+agent = create_agent(
+    model=llm,
     tools=tools,
-    prompt= react_prompt_with_format_instructions,
+    response_format=ToolStrategy(AgentResponse)
 )
-agent_executor = AgentExecutor(
-    agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
-)
-extract_output = RunnableLambda(
-    lambda x: x["output"]
-)
-chain = agent_executor | extract_output | structured_llm
 
 
 def main():
-    result = chain.invoke(
-        input={
-            "input": "search for 3 job postings for an ai engineer using langchain in the bay area on linkedin and list their details",
-        }
-    )
-    print(result)
-
+    # Prepare the message for the agent (new API expects 'messages' key)
+    user_query = "search for 3 job postings for an ai engineer using langchain in the bay area on linkedin and list their details"
+    result = agent.invoke({
+        "messages": [{"role": "user", "content": user_query}]
+    })
+    # If using structured output, access it via result["structured_response"]
+    print(result.get("structured_response", result))
 
 if __name__ == "__main__":
     main()
